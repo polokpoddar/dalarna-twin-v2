@@ -858,13 +858,62 @@ export default function SimulationTab({ onResult }: SimulationTabProps) {
             ))}
           </div>
 
+          {/* OpenAI AI Analysis Badge */}
+          {simInsight?.generated_by?.includes("OpenAI") && (
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 10,
+                color: "#10b981",
+                fontWeight: 800,
+                background: "rgba(16,185,129,0.12)",
+                border: "1px solid rgba(16,185,129,0.35)",
+                padding: "3px 8px",
+                borderRadius: 5,
+                width: "fit-content",
+              }}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: "#10b981",
+                  boxShadow: "0 0 6px #10b981",
+                  display: "inline-block",
+                }}
+              />
+              <span>OpenAI GPT-4o-mini Live Regional Resilience Analysis</span>
+            </div>
+          )}
+
+          {/* Risk Narrative */}
+          {simInsight?.risk_narrative && (
+            <div
+              style={{
+                fontSize: 10,
+                color: "var(--text-secondary)",
+                lineHeight: 1.5,
+                fontStyle: "italic",
+                background: "rgba(8,12,20,0.5)",
+                padding: "8px 10px",
+                borderRadius: 6,
+                border: "1px solid var(--border)",
+              }}
+            >
+              {simInsight.risk_narrative}
+            </div>
+          )}
+
           {/* Top recommendations */}
           {simInsight?.recommendations && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 2 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 2 }}>
               <div style={{ fontSize: 9, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase" }}>
-                Priority Resilience Actions:
+                Priority Resilience & Emergency Actions:
               </div>
-              {simInsight.recommendations.slice(0, 2).map((rec: string, i: number) => (
+              {simInsight.recommendations.map((rec: string, i: number) => (
                 <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 10, color: "var(--text-secondary)" }}>
                   <ArrowRight className="w-3 h-3 text-blue-400 flex-shrink-0 mt-0.5" />
                   <span>{rec}</span>

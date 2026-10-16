@@ -348,6 +348,97 @@ export async function POST(req: Request) {
           }
         ];
 
+    // Sort municipalities by risk to identify highest vulnerability areas
+    const topVulnerable = [...municipalitiesResult]
+      .sort((a, b) => b.overall_risk.score - a.overall_risk.score)
+      .slice(0, 3)
+      .map((m) => `${m.name} (${(m.overall_risk.score * 100).toFixed(0)}%)`);
+
+    // Attempt real OpenAI analysis with user's API key
+    let aiInsight = null;
+    const apiKey = process.env.OPENAI_API_KEY;
+
+    if (apiKey) {
+      try {
+        const prompt = `You are the Region Dalarna Chief Resilience & Spatial AI Scientist (Sweden).
+Real Baseline Context:
+- Region: Dalarna County, Sweden (15 municipalities, total baseline pop: 287,387)
+- Key Hubs: Falun, Borlänge, Mora, Älvdalen, Malung-Sälen, Ludvika, Avesta
+- Real Feeds: SMHI (live weather stations), Trafikverket (corridors E16, Rv50, Rv70), SGU (88 groundwater aquifers), Skogsstyrelsen (boreal forest canopy)
+
+Simulated Parameters for ${targetYear}:
+- Scenario: ${scenario}
+- Mode: ${isCombined ? "Combined Multi-Hazard Impact" : "Single Source"}
+- Composite Vulnerability Score: ${(regionalRisk.score * 100).toFixed(0)}% (${regionalRisk.level})
+- Food Risk: ${categoryRisks.food_risk}, Snow/Flood: ${categoryRisks.snow_flood_risk}, Infrastructure: ${categoryRisks.infrastructure_risk}, Environment: ${categoryRisks.environment_risk}
+- Highest Risk Municipalities: ${topVulnerable.join(", ")}
+- Drivers: ${JSON.stringify(driver)}
+
+Return STRICT JSON:
+{
+  "summary": "1-2 sentences summarizing the simulated regional impact on Dalarna",
+  "risk_narrative": "Detailed causal explanation of how climate, forestry, infrastructure and population pressures interact across Dalarna's geography",
+  "recommendations": ["Action 1 for municipal or county emergency planners naming specific Dalarna hubs", "Action 2", "Action 3"],
+  "trend_analysis": "Context on alignment with Swedish civil protection (MSB) and SMHI guidelines",
+  "alert_level": "critical" | "high" | "elevated"
+}`;
+
+        const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            messages: [
+              {
+                role: "system",
+                content: "You are an expert Swedish regional resilience and multi-hazard digital twin AI. You always respond in valid JSON format."
+              },
+              { role: "user", content: prompt }
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.4,
+            max_tokens: 500,
+          }),
+        });
+
+        if (aiRes.ok) {
+          const aiJson = await aiRes.json();
+          const content = aiJson.choices?.[0]?.message?.content;
+          if (content) {
+            const parsed = JSON.parse(content);
+            aiInsight = {
+              summary: parsed.summary,
+              risk_narrative: parsed.risk_narrative,
+              recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations : [parsed.recommendations],
+              trend_analysis: parsed.trend_analysis,
+              alert_level: parsed.alert_level || (regionalRisk.level === "Critical" ? "critical" : regionalRisk.level === "High" ? "high" : "elevated"),
+              generated_by: "OpenAI GPT-4o-mini (Real AI Analysis)",
+            };
+          }
+        }
+      } catch (aiErr) {
+        console.warn("OpenAI API call failed, using calibrated deterministic engine:", aiErr);
+      }
+    }
+
+    const defaultInsight = {
+      summary: `Simulation for ${targetYear} under "${scenario.replace(/_/g, " ")}" projects a regional risk index of ${(regionalRisk.score * 100).toFixed(0)}% (${regionalRisk.level}).`,
+      risk_narrative: `Perturbations in ${scenario.replace(/_/g, " ")} amplify stress along key Dalarna infrastructure and demographic corridors (E16, Rv50, Rv70) and forested highlands (${topVulnerable.join(", ")}).`,
+      recommendations: [
+        "Prioritize emergency logistics along the E16 and Rv70 primary transportation corridors.",
+        "Synchronize Dalarna County Board (Länsstyrelsen) climate mitigation reserves with municipal disaster plans.",
+        "Deploy adaptive monitoring stations in Borlänge, Falun, and outlying rural hubs."
+      ],
+      trend_analysis: "Aligns with Sweden's national regional resilience frameworks and SMHI meteorological trend lines.",
+      alert_level: regionalRisk.level === "Critical" ? "critical" : regionalRisk.level === "High" ? "high" : "elevated",
+      generated_by: "regional_risk_engine"
+    };
+
+    const finalInsight = aiInsight || defaultInsight;
+
     return NextResponse.json({
       success: true,
       result: {
@@ -357,7 +448,7 @@ export async function POST(req: Request) {
         summary: {
           regional_risk: regionalRisk,
           category_risks: categoryRisks,
-          key_takeaway: `Simulation for ${targetYear} under "${scenario.replace(/_/g, " ")}" projects composite regional vulnerability of ${(regionalRisk.score * 100).toFixed(0)}% (${regionalRisk.level}).`
+          key_takeaway: finalInsight.summary || `Simulation for ${targetYear} under "${scenario.replace(/_/g, " ")}" projects composite regional vulnerability of ${(regionalRisk.score * 100).toFixed(0)}% (${regionalRisk.level}).`
         },
         impact_by_source: impactBySource,
         municipalities: municipalitiesResult,
@@ -368,18 +459,7 @@ export async function POST(req: Request) {
           note: "Baselines derived from SCB 2024 register and real-time SMHI Stora Spånsberget A telemetry."
         }
       },
-      insight: {
-        summary: `Simulation for ${targetYear} under "${scenario.replace(/_/g, " ")}" projects a regional risk index of ${(regionalRisk.score * 100).toFixed(0)}% (${regionalRisk.level}).`,
-        risk_narrative: `Perturbations in ${scenario.replace(/_/g, " ")} amplify stress along key Dalarna infrastructure and demographic corridors (E16, Rv50, Rv70).`,
-        recommendations: [
-          "Prioritize emergency logistics along the E16 and Rv70 primary transportation corridors.",
-          "Synchronize Dalarna County Board (Länsstyrelsen) climate mitigation reserves with municipal disaster plans.",
-          "Deploy adaptive monitoring stations in Borlänge, Falun, and outlying rural hubs."
-        ],
-        trend_analysis: "Aligns with Sweden's national regional resilience frameworks and SMHI meteorological trend lines.",
-        alert_level: regionalRisk.level === "Critical" ? "critical" : regionalRisk.level === "High" ? "high" : "elevated",
-        generated_by: "regional_risk_engine"
-      },
+      insight: finalInsight,
       admin_control: {
         version: 1,
         excluded_sources: []

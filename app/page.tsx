@@ -57,6 +57,11 @@ export default function Home() {
   const [simulationInsight, setSimulationInsight] = useState<any>(null);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const fetchLiveTelemetry = useCallback(async (isSilent = false) => {
     if (!isSilent) setIsSyncing(true);
@@ -490,7 +495,7 @@ export default function Home() {
                       Swedish National Open Data & Real Sensor Telemetry
                     </div>
                   </div>
-                  {lastSyncTime && (
+                  {isMounted && lastSyncTime && (
                     <span
                       style={{
                         fontSize: 10,
