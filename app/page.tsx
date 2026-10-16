@@ -324,7 +324,7 @@ export default function Home() {
       {/* Main Split Body */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
         {/* Left Map Viewport */}
-        <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+        <div style={{ flex: 1, position: "relative", width: "100%", height: "100%", minHeight: 0, overflow: "hidden" }}>
           <DynamicDalarnaMap municipalityRisks={mapRisks} />
 
           {/* Active Simulation Floating Card */}

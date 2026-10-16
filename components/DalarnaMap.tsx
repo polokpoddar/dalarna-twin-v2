@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import { MUNICIPALITIES, getRiskColor } from "@/lib/constants";
 import { RiskLevel } from "@/lib/types";
 
@@ -35,17 +36,22 @@ export default function DalarnaMap({
         return {
           url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
           attribution: "Esri World Imagery",
+          maxZoom: 18,
         };
       case "dark":
         return {
           url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
           attribution: "© OpenStreetMap contributors, © CARTO",
+          subdomains: "abcd",
+          maxZoom: 19,
         };
       case "osm":
       default:
         return {
           url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
           attribution: "© OpenStreetMap contributors",
+          subdomains: "abc",
+          maxZoom: 19,
         };
     }
   }
@@ -75,8 +81,17 @@ export default function DalarnaMap({
     const tileCfg = getTileConfig(tileMode);
     currentTileLayerRef.current = L.tileLayer(tileCfg.url, {
       attribution: tileCfg.attribution,
-      maxZoom: 18,
+      subdomains: tileCfg.subdomains || "abc",
+      maxZoom: tileCfg.maxZoom || 18,
     }).addTo(map);
+
+    // Invalidate size on mount and after delay to ensure tiles load
+    map.invalidateSize();
+    const t1 = setTimeout(() => map.invalidateSize(), 100);
+    const t2 = setTimeout(() => map.invalidateSize(), 300);
+
+    const handleResize = () => map.invalidateSize();
+    window.addEventListener("resize", handleResize);
 
     // Add municipality centroid labels layer
     const labelGroup = L.layerGroup().addTo(map);
@@ -191,6 +206,9 @@ export default function DalarnaMap({
       .catch((err) => console.error("Error loading Dalarna GeoJSON:", err));
 
     return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      window.removeEventListener("resize", handleResize);
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -227,18 +245,44 @@ export default function DalarnaMap({
     const cfg = getTileConfig(mode);
     currentTileLayerRef.current = L.tileLayer(cfg.url, {
       attribution: cfg.attribution,
-      maxZoom: 18,
+      subdomains: cfg.subdomains || "abc",
+      maxZoom: cfg.maxZoom || 18,
     }).addTo(mapInstanceRef.current);
 
     if (geojsonLayerRef.current) {
       geojsonLayerRef.current.bringToFront();
     }
+    mapInstanceRef.current.invalidateSize();
   }
 
   return (
-    <div className="relative w-full h-full overflow-hidden" style={{ background: "#060911" }}>
+    <div
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: "100%",
+        height: "100%",
+        overflow: "hidden",
+        background: "#080c14",
+      }}
+    >
       {/* Map DOM node */}
-      <div ref={mapContainerRef} style={{ width: "100%", height: "100%", zIndex: 1 }} />
+      <div
+        ref={mapContainerRef}
+        style={{
+          width: "100%",
+          height: "100%",
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 1,
+        }}
+      />
 
       {/* Top Left Header Card */}
       <div
