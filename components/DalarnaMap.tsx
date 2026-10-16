@@ -40,10 +40,9 @@ export default function DalarnaMap({
         };
       case "dark":
         return {
-          url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-          attribution: "© OpenStreetMap contributors, © CARTO",
-          subdomains: "abcd",
-          maxZoom: 19,
+          url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+          attribution: "Esri World Dark Gray Canvas",
+          maxZoom: 16,
         };
       case "osm":
       default:
@@ -58,6 +57,8 @@ export default function DalarnaMap({
 
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
+
+    let isCancelled = false;
 
     const map = L.map(mapContainerRef.current, {
       center: [60.75, 14.85],
@@ -116,7 +117,7 @@ export default function DalarnaMap({
         ">${m.name}</div>`,
         iconSize: [0, 0],
       });
-      L.marker([m.lat, m.lon], { icon: labelIcon, interactive: false }).addTo(labelGroup);
+      L.marker([m.lat, m.lon], { icon: labelIcon, interactive: false, zIndexOffset: 1000 }).addTo(labelGroup);
     });
 
     fetch("/data/dalarna_municipalities.geojson")
@@ -125,6 +126,7 @@ export default function DalarnaMap({
         return res.json();
       })
       .then((geoData) => {
+        if (isCancelled || !mapInstanceRef.current) return;
         const geoLayer = L.geoJSON(geoData, {
           style: (feature) => {
             const code = feature?.properties?.code;
@@ -200,12 +202,18 @@ export default function DalarnaMap({
           },
         }).addTo(map);
 
-        geojsonLayerRef.current = geoLayer;
-        labelGroup.eachLayer((l: any) => l.bringToFront?.());
+        if (!isCancelled) {
+          geojsonLayerRef.current = geoLayer;
+        }
       })
-      .catch((err) => console.error("Error loading Dalarna GeoJSON:", err));
+      .catch((err) => {
+        if (!isCancelled) {
+          console.error("Error loading Dalarna GeoJSON:", err?.stack || err);
+        }
+      });
 
     return () => {
+      isCancelled = true;
       clearTimeout(t1);
       clearTimeout(t2);
       window.removeEventListener("resize", handleResize);
