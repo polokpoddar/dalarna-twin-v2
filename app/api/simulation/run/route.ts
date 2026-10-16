@@ -27,111 +27,149 @@ export async function POST(req: Request) {
     let environmentMultiplier = 0;
     let weatherMultiplier = 0;
 
-    switch (scenario) {
-      case "population_growth":
-        popChangeMultiplier = driver.population_change ?? 0.1;
-        compositeScore = 0.52;
-        categoryRisks = {
-          food_risk: "Medium",
-          snow_flood_risk: "Low",
-          infrastructure_risk: "High",
-          environment_risk: "Medium"
-        };
-        break;
+    // Check for combined scenario simulation
+    const isCombined = scenario === "combined" || driver.is_combined || scenario === "combined_simulation";
 
-      case "rapid_urbanization":
-        popChangeMultiplier = driver.population_change ?? 0.18;
-        compositeScore = 0.68;
-        categoryRisks = {
-          food_risk: "Medium",
-          snow_flood_risk: "Low",
-          infrastructure_risk: "Critical",
-          environment_risk: "High"
-        };
-        break;
+    if (isCombined) {
+      const popPct = driver.pop_growth_pct ?? 10;
+      const roadInc = driver.road_temp_inc ?? 2.0;
+      const landPct = driver.land_dev_pct ?? 15;
+      const forestPct = driver.forest_harvest_pct ?? 20;
+      const waterPct = driver.water_stress_pct ?? -15;
+      const weatherTemp = driver.weather_temp_c ?? 2.0;
 
-      case "climate_freeze_thaw":
-        infrastructureMultiplier = 0.4;
-        weatherMultiplier = 0.3;
-        compositeScore = 0.59;
-        categoryRisks = {
-          food_risk: "Low",
-          snow_flood_risk: "High",
-          infrastructure_risk: "Critical",
-          environment_risk: "Medium"
-        };
-        break;
+      popChangeMultiplier = popPct / 100;
+      infrastructureMultiplier = (roadInc / 10) * 0.35 + (landPct / 100) * 0.25;
+      environmentMultiplier = (forestPct / 100) * 0.35 + (Math.abs(waterPct) / 100) * 0.3;
+      weatherMultiplier = (weatherTemp / 10) * 0.4;
 
-      case "traffic_surge":
-        infrastructureMultiplier = driver.traffic_congestion_pct ?? 0.25;
-        compositeScore = 0.55;
-        categoryRisks = {
-          food_risk: "Low",
-          snow_flood_risk: "Low",
-          infrastructure_risk: "High",
-          environment_risk: "Medium"
-        };
-        break;
+      compositeScore = Math.min(
+        0.95,
+        Math.max(
+          0.15,
+          0.32 +
+            (popPct / 100) * 0.22 +
+            (roadInc / 10) * 0.15 +
+            (landPct / 100) * 0.18 +
+            (forestPct / 100) * 0.2 +
+            (Math.abs(waterPct) / 100) * 0.18 +
+            (weatherTemp / 10) * 0.16
+        )
+      );
 
-      case "forest_harvest_stress":
-        environmentMultiplier = 0.35;
-        compositeScore = 0.62;
-        categoryRisks = {
-          food_risk: "Low",
-          snow_flood_risk: "Medium",
-          infrastructure_risk: "Medium",
-          environment_risk: "Critical"
-        };
-        break;
+      categoryRisks = {
+        food_risk: Math.abs(waterPct) > 20 || popPct > 15 ? "High" : "Medium",
+        snow_flood_risk: weatherTemp > 2.5 || roadInc > 2.5 ? "Critical" : "High",
+        infrastructure_risk: popPct > 12 || roadInc > 1.5 ? "High" : "Medium",
+        environment_risk: forestPct > 15 || Math.abs(waterPct) > 15 ? "High" : "Medium"
+      };
+    } else {
+      switch (scenario) {
+        case "population_growth":
+          popChangeMultiplier = driver.population_change ?? 0.1;
+          compositeScore = 0.52;
+          categoryRisks = {
+            food_risk: "Medium",
+            snow_flood_risk: "Low",
+            infrastructure_risk: "High",
+            environment_risk: "Medium"
+          };
+          break;
 
-      case "forest_fire_risk":
-        environmentMultiplier = 0.5;
-        compositeScore = 0.74;
-        categoryRisks = {
-          food_risk: "Medium",
-          snow_flood_risk: "Low",
-          infrastructure_risk: "High",
-          environment_risk: "Critical"
-        };
-        break;
+        case "rapid_urbanization":
+          popChangeMultiplier = driver.population_change ?? 0.18;
+          compositeScore = 0.68;
+          categoryRisks = {
+            food_risk: "Medium",
+            snow_flood_risk: "Low",
+            infrastructure_risk: "Critical",
+            environment_risk: "High"
+          };
+          break;
 
-      case "groundwater_drought":
-      case "aquifer_stress":
-        environmentMultiplier = 0.4;
-        compositeScore = 0.65;
-        categoryRisks = {
-          food_risk: "High",
-          snow_flood_risk: "Low",
-          infrastructure_risk: "Medium",
-          environment_risk: "High"
-        };
-        break;
+        case "climate_freeze_thaw":
+          infrastructureMultiplier = 0.4;
+          weatherMultiplier = 0.3;
+          compositeScore = 0.59;
+          categoryRisks = {
+            food_risk: "Low",
+            snow_flood_risk: "High",
+            infrastructure_risk: "Critical",
+            environment_risk: "Medium"
+          };
+          break;
 
-      case "extreme_weather_storm":
-        weatherMultiplier = 0.5;
-        compositeScore = 0.76;
-        categoryRisks = {
-          food_risk: "Medium",
-          snow_flood_risk: "Critical",
-          infrastructure_risk: "Critical",
-          environment_risk: "High"
-        };
-        break;
+        case "traffic_surge":
+          infrastructureMultiplier = driver.traffic_congestion_pct ?? 0.25;
+          compositeScore = 0.55;
+          categoryRisks = {
+            food_risk: "Low",
+            snow_flood_risk: "Low",
+            infrastructure_risk: "High",
+            environment_risk: "Medium"
+          };
+          break;
 
-      case "heat_wave":
-        weatherMultiplier = 0.4;
-        environmentMultiplier = 0.3;
-        compositeScore = 0.61;
-        categoryRisks = {
-          food_risk: "Medium",
-          snow_flood_risk: "Low",
-          infrastructure_risk: "Medium",
-          environment_risk: "High"
-        };
-        break;
+        case "forest_harvest_stress":
+          environmentMultiplier = 0.35;
+          compositeScore = 0.62;
+          categoryRisks = {
+            food_risk: "Low",
+            snow_flood_risk: "Medium",
+            infrastructure_risk: "Medium",
+            environment_risk: "Critical"
+          };
+          break;
 
-      default:
-        compositeScore = 0.5;
+        case "forest_fire_risk":
+          environmentMultiplier = 0.5;
+          compositeScore = 0.74;
+          categoryRisks = {
+            food_risk: "Medium",
+            snow_flood_risk: "Low",
+            infrastructure_risk: "High",
+            environment_risk: "Critical"
+          };
+          break;
+
+        case "groundwater_drought":
+        case "aquifer_stress":
+          environmentMultiplier = 0.4;
+          compositeScore = 0.65;
+          categoryRisks = {
+            food_risk: "High",
+            snow_flood_risk: "Low",
+            infrastructure_risk: "Medium",
+            environment_risk: "High"
+          };
+          break;
+
+        case "extreme_weather_storm":
+          weatherMultiplier = 0.5;
+          compositeScore = 0.76;
+          categoryRisks = {
+            food_risk: "Medium",
+            snow_flood_risk: "Critical",
+            infrastructure_risk: "Critical",
+            environment_risk: "High"
+          };
+          break;
+
+        case "heat_wave":
+          weatherMultiplier = 0.4;
+          environmentMultiplier = 0.3;
+          compositeScore = 0.61;
+          categoryRisks = {
+            food_risk: "Medium",
+            snow_flood_risk: "Low",
+            infrastructure_risk: "Medium",
+            environment_risk: "High"
+          };
+          break;
+
+        default:
+          compositeScore = 0.5;
+      }
     }
 
     const regionalRisk = calculateRiskLevel(compositeScore);
@@ -177,68 +215,138 @@ export async function POST(req: Request) {
       };
     });
 
-    const impactBySource = [
-      {
-        id: "scb",
-        name: "Population (SCB / Kolada)",
-        role: "Demographic Demand",
-        current: "287,387 inhabitants",
-        simulated: `${Math.round(287387 * (1 + popChangeMultiplier)).toLocaleString()} inhabitants`,
-        change: popChangeMultiplier >= 0 ? `+${(popChangeMultiplier * 100).toFixed(0)}%` : `${(popChangeMultiplier * 100).toFixed(0)}%`,
-        impact: scenario.startsWith("population") || scenario.startsWith("rapid") ? "Driver" : "Baseline",
-        status: "included"
-      },
-      {
-        id: "trafikverket",
-        name: "Traffic (Trafikverket)",
-        role: "Infrastructure Demand",
-        current: "9.2 °C (0 ice / 42 stations)",
-        simulated: scenario === "climate_freeze_thaw" ? "5.7 °C (25% demand change)" : "9.2 °C",
-        change: scenario === "climate_freeze_thaw" ? "-3.5 °C" : "+0%",
-        impact: scenario.includes("traffic") || scenario.includes("freeze") ? "Driver" : "Medium",
-        status: "included"
-      },
-      {
-        id: "lantmateriet",
-        name: "Land parcels (Lantmäteriet)",
-        role: "Development Pressure",
-        current: "148,200 parcels",
-        simulated: scenario.includes("land") ? "177,840 parcels" : "148,200 parcels",
-        change: scenario.includes("land") ? "+20%" : "+0%",
-        impact: scenario.includes("land") ? "Driver" : "Medium",
-        status: "included"
-      },
-      {
-        id: "skogsstyrelsen",
-        name: "Forest area (Skogsstyrelsen)",
-        role: "Environmental Balance",
-        current: "2,420 records",
-        simulated: scenario.includes("forest") ? "3,025 notices" : "2,420 notices",
-        change: scenario.includes("forest") ? "+25%" : "+0%",
-        impact: scenario.includes("forest") ? "Driver" : "Medium",
-        status: "included"
-      },
-      {
-        id: "sgu",
-        name: "Water exposure (SGU)",
-        role: "Hydrogeological Exposure",
-        current: "88 bodies (6,450 km²)",
-        simulated: scenario.includes("groundwater") ? "88 bodies (-30% storage)" : "88 bodies",
-        change: scenario.includes("groundwater") ? "-30%" : "+0%",
-        impact: scenario.includes("groundwater") || scenario.includes("aquifer") ? "Driver" : "Medium",
-        status: "included"
-      },
-      {
-        id: "smhi",
-        name: "Weather (SMHI)",
-        role: "Atmospheric Condition",
-        current: "9.6 °C",
-        simulated: scenario.includes("heat_wave") ? "12.8 °C (+3.2 °C anomaly)" : "9.6 °C",
-        change: scenario.includes("heat_wave") ? "+3.2 °C" : "+0.0 °C",
-        impact: scenario.includes("storm") || scenario.includes("heat") ? "Driver" : "External",
-        status: "included"
-      }
-    ];
+    const popPct = driver.pop_growth_pct ?? (popChangeMultiplier * 100);
+    const roadInc = driver.road_temp_inc ?? (scenario === "climate_freeze_thaw" ? -3.5 : 2.0);
+    const landPct = driver.land_dev_pct ?? 15;
+    const forestPct = driver.forest_harvest_pct ?? 20;
+    const waterPct = driver.water_stress_pct ?? -15;
+    const weatherTemp = driver.weather_temp_c ?? 2.0;
+
+    const impactBySource = isCombined
+      ? [
+          {
+            id: "scb",
+            name: "Population (SCB / Kolada)",
+            role: "Demographic Demand",
+            current: "287,387 inhabitants",
+            simulated: `${Math.round(287387 * (1 + popPct / 100)).toLocaleString()} inhabitants`,
+            change: popPct >= 0 ? `+${popPct}%` : `${popPct}%`,
+            impact: "Driver",
+            status: "included"
+          },
+          {
+            id: "trafikverket",
+            name: "Road (Trafikverket)",
+            role: "Infrastructure Demand",
+            current: "1.8 °C (0 active alerts)",
+            simulated: `${(1.8 + roadInc).toFixed(1)} °C (+${Math.round(roadInc * 10)}% strain)`,
+            change: roadInc >= 0 ? `+${roadInc.toFixed(1)} °C` : `${roadInc.toFixed(1)} °C`,
+            impact: "Driver",
+            status: "included"
+          },
+          {
+            id: "lantmateriet",
+            name: "Land (Lantmäteriet)",
+            role: "Development Pressure",
+            current: "148,200 parcels",
+            simulated: `${Math.round(148200 * (1 + landPct / 100)).toLocaleString()} parcels`,
+            change: landPct >= 0 ? `+${landPct}%` : `${landPct}%`,
+            impact: "Driver",
+            status: "included"
+          },
+          {
+            id: "skogsstyrelsen",
+            name: "Forest (Skogsstyrelsen)",
+            role: "Canopy & Harvest",
+            current: "2,420 stands (72% integrity)",
+            simulated: `${Math.round(2420 * (1 + forestPct / 100)).toLocaleString()} stands`,
+            change: forestPct >= 0 ? `+${forestPct}%` : `${forestPct}%`,
+            impact: "Driver",
+            status: "included"
+          },
+          {
+            id: "sgu",
+            name: "Water (SGU)",
+            role: "Hydrogeological Exposure",
+            current: "88 aquifers (normal level)",
+            simulated: `88 aquifers (${waterPct}% capacity)`,
+            change: waterPct >= 0 ? `+${waterPct}%` : `${waterPct}%`,
+            impact: "Driver",
+            status: "included"
+          },
+          {
+            id: "smhi",
+            name: "Weather (SMHI)",
+            role: "Atmospheric Condition",
+            current: "2.2 °C | 0.3 mm/h | 4.5 m/s",
+            simulated: `${(2.2 + weatherTemp).toFixed(1)} °C (elevated hazard)`,
+            change: weatherTemp >= 0 ? `+${weatherTemp.toFixed(1)} °C` : `${weatherTemp.toFixed(1)} °C`,
+            impact: "Driver",
+            status: "included"
+          }
+        ]
+      : [
+          {
+            id: "scb",
+            name: "Population (SCB / Kolada)",
+            role: "Demographic Demand",
+            current: "287,387 inhabitants",
+            simulated: `${Math.round(287387 * (1 + popChangeMultiplier)).toLocaleString()} inhabitants`,
+            change: popChangeMultiplier >= 0 ? `+${(popChangeMultiplier * 100).toFixed(0)}%` : `${(popChangeMultiplier * 100).toFixed(0)}%`,
+            impact: scenario.startsWith("population") || scenario.startsWith("rapid") ? "Driver" : "Baseline",
+            status: "included"
+          },
+          {
+            id: "trafikverket",
+            name: "Traffic (Trafikverket)",
+            role: "Infrastructure Demand",
+            current: "9.2 °C (0 ice / 42 stations)",
+            simulated: scenario === "climate_freeze_thaw" ? "5.7 °C (25% demand change)" : "9.2 °C",
+            change: scenario === "climate_freeze_thaw" ? "-3.5 °C" : "+0%",
+            impact: scenario.includes("traffic") || scenario.includes("freeze") ? "Driver" : "Medium",
+            status: "included"
+          },
+          {
+            id: "lantmateriet",
+            name: "Land parcels (Lantmäteriet)",
+            role: "Development Pressure",
+            current: "148,200 parcels",
+            simulated: scenario.includes("land") ? "177,840 parcels" : "148,200 parcels",
+            change: scenario.includes("land") ? "+20%" : "+0%",
+            impact: scenario.includes("land") ? "Driver" : "Medium",
+            status: "included"
+          },
+          {
+            id: "skogsstyrelsen",
+            name: "Forest area (Skogsstyrelsen)",
+            role: "Environmental Balance",
+            current: "2,420 records",
+            simulated: scenario.includes("forest") ? "3,025 notices" : "2,420 notices",
+            change: scenario.includes("forest") ? "+25%" : "+0%",
+            impact: scenario.includes("forest") ? "Driver" : "Medium",
+            status: "included"
+          },
+          {
+            id: "sgu",
+            name: "Water exposure (SGU)",
+            role: "Hydrogeological Exposure",
+            current: "88 bodies (6,450 km²)",
+            simulated: scenario.includes("groundwater") ? "88 bodies (-30% storage)" : "88 bodies",
+            change: scenario.includes("groundwater") ? "-30%" : "+0%",
+            impact: scenario.includes("groundwater") || scenario.includes("aquifer") ? "Driver" : "Medium",
+            status: "included"
+          },
+          {
+            id: "smhi",
+            name: "Weather (SMHI)",
+            role: "Atmospheric Condition",
+            current: "9.6 °C",
+            simulated: scenario.includes("heat_wave") ? "12.8 °C (+3.2 °C anomaly)" : "9.6 °C",
+            change: scenario.includes("heat_wave") ? "+3.2 °C" : "+0.0 °C",
+            impact: scenario.includes("storm") || scenario.includes("heat") ? "Driver" : "External",
+            status: "included"
+          }
+        ];
 
     return NextResponse.json({
       success: true,

@@ -1,71 +1,79 @@
 "use client";
 
 import React, { useState } from "react";
-import { SCENARIO_GROUPS, SCENARIO_MODELS, SCENARIO_PARAMS, getRiskColor } from "@/lib/constants";
 import { SimulationResult } from "@/lib/types";
 import {
-  SlidersVertical,
+  SlidersHorizontal,
   Calendar,
-  Cpu,
   RotateCcw,
   Play,
-  TriangleAlert,
+  Users,
+  Car,
+  Map as MapIcon,
+  TreePine,
+  Droplets,
+  CloudSun,
+  Settings,
   Layers,
-  ArrowRight,
   BarChart3,
   Building2,
-  BookOpen,
+  CheckCircle2,
+  ArrowRight,
+  TriangleAlert,
 } from "lucide-react";
+import { getRiskColor } from "@/lib/constants";
 
 interface SimulationTabProps {
   onResult: (result: SimulationResult, insight: any) => void;
 }
 
 export default function SimulationTab({ onResult }: SimulationTabProps) {
-  const [scenario, setScenario] = useState("population_growth");
-  const [targetYear, setTargetYear] = useState(2030);
-  const [driverParams, setDriverParams] = useState<Record<string, number>>({});
+  const [targetYear, setTargetYear] = useState<number>(2030);
+  const [simulationMode, setSimulationMode] = useState<"combined" | "individual">("combined");
   const [simulating, setSimulating] = useState(false);
   const [simResult, setSimResult] = useState<SimulationResult | null>(null);
   const [simInsight, setSimInsight] = useState<any>(null);
-  const [subTab, setSubTab] = useState<"impact" | "municipalities" | "methodology">("impact");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const activeParams = SCENARIO_PARAMS[scenario] || [];
-  const activeScenarioMeta = SCENARIO_MODELS.find((s) => s.id === scenario);
+  // 6 parameter sliders matching screenshot defaults
+  const [popGrowth, setPopGrowth] = useState<number>(10);
+  const [roadTemp, setRoadTemp] = useState<number>(2.0);
+  const [landDev, setLandDev] = useState<number>(15);
+  const [forestHarvest, setForestHarvest] = useState<number>(20);
+  const [waterStress, setWaterStress] = useState<number>(-15);
+  const [weatherChange, setWeatherChange] = useState<number>(2.0);
 
-  function getParamVal(p: any) {
-    return driverParams[p.key] ?? p.default;
+  function resetAll() {
+    setPopGrowth(10);
+    setRoadTemp(2.0);
+    setLandDev(15);
+    setForestHarvest(20);
+    setWaterStress(-15);
+    setWeatherChange(2.0);
+    setTargetYear(2030);
   }
 
-  function setParamVal(key: string, val: number, meta: any) {
-    const clamped = Math.min(meta.max, Math.max(meta.min, Math.round(val * 100) / 100));
-    setDriverParams((prev) => ({ ...prev, [key]: clamped }));
-  }
-
-  function stepParam(param: any, dir: "up" | "down") {
-    const current = getParamVal(param);
-    const delta = dir === "up" ? param.step : -param.step;
-    setParamVal(param.key, current + delta, param);
-  }
-
-  async function runSimulation() {
+  async function handleRunSimulation() {
     setSimulating(true);
     setErrorMsg(null);
 
     try {
-      const driverObj: Record<string, number> = {};
-      activeParams.forEach((p) => {
-        driverObj[p.key] = getParamVal(p);
-      });
-
       const res = await fetch("/api/simulation/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          scenario,
+          scenario: "combined",
           targetYear,
-          driver: driverObj,
+          driver: {
+            is_combined: true,
+            simulation_mode: simulationMode,
+            pop_growth_pct: popGrowth,
+            road_temp_inc: roadTemp,
+            land_dev_pct: landDev,
+            forest_harvest_pct: forestHarvest,
+            water_stress_pct: waterStress,
+            weather_temp_c: weatherChange,
+          },
         }),
       });
 
@@ -74,11 +82,10 @@ export default function SimulationTab({ onResult }: SimulationTabProps) {
         setSimResult(data.result);
         setSimInsight(data.insight);
         onResult(data.result, data.insight);
-        setSubTab("impact");
       } else {
-        setErrorMsg(data.error || "Simulation run encountered an error.");
+        setErrorMsg(data.error || "Simulation failed to compute.");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Simulation error:", err);
       setErrorMsg("Failed to communicate with simulation engine.");
     } finally {
@@ -86,294 +93,686 @@ export default function SimulationTab({ onResult }: SimulationTabProps) {
     }
   }
 
-  const riskColor = simResult ? getRiskColor(simResult.summary.regional_risk.level) : "var(--text-muted)";
+  const riskColor = simResult ? getRiskColor(simResult.summary.regional_risk.level) : "#3b82f6";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      {/* Scenario Model Selector */}
+      {/* Title & Description */}
       <div>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 6,
-          }}
-        >
-          <span
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <div
             style={{
-              fontSize: 12,
-              fontWeight: 800,
-              color: "var(--text-primary)",
+              width: 24,
+              height: 24,
+              borderRadius: 6,
+              background: "rgba(59,130,246,0.2)",
+              border: "1px solid rgba(59,130,246,0.4)",
               display: "flex",
               alignItems: "center",
-              gap: 6,
+              justifyContent: "center",
             }}
           >
-            <SlidersVertical className="w-3.5 h-3.5 text-blue-400" />
-            <span>Scenario Model</span>
-          </span>
-          <span style={{ fontSize: 10, color: "var(--accent-blue)", fontWeight: 700 }}>
-            6 Official Catalogs
-          </span>
+            <SlidersHorizontal className="w-3.5 h-3.5 text-blue-400" />
+          </div>
+          <h2 style={{ fontSize: 14, fontWeight: 900, color: "var(--text-primary)", letterSpacing: "0.02em" }}>
+            Combined Scenario Simulation
+          </h2>
+        </div>
+        <p style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.4 }}>
+          Simulate all 6 official data sources together to analyze cumulative impacts across Dalarna.
+        </p>
+      </div>
+
+      {/* Scenario Year Selector & Reset All */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          background: "rgba(13,20,37,0.5)",
+          padding: "8px 12px",
+          borderRadius: 8,
+          border: "1px solid var(--border)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 700, color: "var(--text-secondary)" }}>
+            <Calendar className="w-3.5 h-3.5 text-purple-400" />
+            <span>Scenario Year</span>
+          </div>
+          <div style={{ display: "flex", gap: 5 }}>
+            {[2026, 2030, 2035, 2040].map((yr) => (
+              <button
+                key={yr}
+                onClick={() => setTargetYear(yr)}
+                style={{
+                  padding: "4px 11px",
+                  borderRadius: 6,
+                  border: "1px solid",
+                  borderColor: targetYear === yr ? "#2563eb" : "var(--border)",
+                  background: targetYear === yr ? "#2563eb" : "rgba(13,20,37,0.7)",
+                  color: targetYear === yr ? "#ffffff" : "var(--text-muted)",
+                  fontSize: 11,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                }}
+              >
+                {yr}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <select
-          value={scenario}
-          onChange={(e) => {
-            setScenario(e.target.value);
-            setDriverParams({});
-            setSimResult(null);
-            setErrorMsg(null);
-          }}
+        <button
+          onClick={resetAll}
           style={{
-            width: "100%",
-            background: "rgba(13,20,37,0.95)",
-            border: "1px solid var(--border-bright)",
-            borderRadius: 8,
-            padding: "9px 12px",
-            color: "var(--text-primary)",
-            fontSize: 12,
-            fontWeight: 600,
-            outline: "none",
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            padding: "4px 8px",
+            border: "1px solid var(--border)",
+            background: "transparent",
+            borderRadius: 6,
+            color: "var(--text-secondary)",
+            fontSize: 10,
+            fontWeight: 700,
             cursor: "pointer",
           }}
         >
-          {SCENARIO_GROUPS.map((group) => (
-            <optgroup key={group.source} label={group.name}>
-              {group.scenarios.map((sId) => {
-                const sModel = SCENARIO_MODELS.find((m) => m.id === sId);
-                return sModel ? (
-                  <option key={sModel.id} value={sModel.id}>
-                    {sModel.name.replace(/^[^\w\s]+\s*/, "")}
-                  </option>
-                ) : null;
-              })}
-            </optgroup>
-          ))}
-        </select>
-
-        {activeScenarioMeta && (
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6, lineHeight: 1.4 }}>
-            {activeScenarioMeta.description}
-          </div>
-        )}
+          <RotateCcw className="w-3 h-3" />
+          <span>Reset All</span>
+        </button>
       </div>
 
-      {/* Target Horizon Year */}
-      <div>
+      {/* 6 Slider Rows */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {/* 1. Population (SCB / Kolada) */}
         <div
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 6,
+            background: "rgba(13,20,37,0.6)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            padding: "10px 12px",
           }}
         >
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: "var(--text-secondary)",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <Calendar className="w-3.5 h-3.5 text-purple-400" />
-            <span>Horizon Projection Year</span>
-          </span>
-          <span style={{ fontSize: 12, fontWeight: 900, color: "var(--accent-blue)" }}>
-            {targetYear}
-          </span>
-        </div>
-
-        <div style={{ display: "flex", gap: 6 }}>
-          {[2026, 2030, 2035, 2040].map((yr) => (
-            <button
-              key={yr}
-              onClick={() => setTargetYear(yr)}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <div
               style={{
-                flex: 1,
-                padding: "6px 0",
-                borderRadius: 6,
-                border: "1px solid",
-                borderColor: targetYear === yr ? "var(--accent-blue)" : "var(--border)",
-                background: targetYear === yr ? "rgba(59,130,246,0.25)" : "rgba(13,20,37,0.6)",
-                color: targetYear === yr ? "var(--accent-blue)" : "var(--text-muted)",
-                fontSize: 11,
-                fontWeight: 700,
-                cursor: "pointer",
-                transition: "all 0.18s",
+                width: 22,
+                height: 22,
+                borderRadius: 5,
+                background: "#7c3aed",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
-              {yr}
-            </button>
-          ))}
+              <Users className="w-3 h-3 text-white" />
+            </div>
+            <div>
+              <span style={{ fontSize: 11, fontWeight: 800, color: "var(--text-primary)" }}>
+                Population (SCB / Kolada)
+              </span>
+              <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: 6 }}>
+                Current: 287,387 inhab. | Stable +0.3% YoY
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ width: 180, fontSize: 10, color: "var(--text-secondary)", fontWeight: 600 }}>
+              Population growth rate
+            </span>
+            <input
+              type="range"
+              min={-20}
+              max={50}
+              step={1}
+              value={popGrowth}
+              onChange={(e) => setPopGrowth(parseInt(e.target.value))}
+              style={{ flex: 1, accentColor: "#8b5cf6" }}
+            />
+            <div
+              style={{
+                width: 48,
+                textAlign: "center",
+                fontSize: 11,
+                fontWeight: 800,
+                color: "#ffffff",
+                background: "rgba(139,92,246,0.25)",
+                border: "1px solid rgba(139,92,246,0.4)",
+                padding: "2px 4px",
+                borderRadius: 5,
+              }}
+            >
+              {popGrowth >= 0 ? `+${popGrowth}%` : `${popGrowth}%`}
+            </div>
+            <div style={{ display: "flex", gap: 3 }}>
+              <button
+                onClick={() => setPopGrowth((p) => Math.max(-20, p - 1))}
+                style={stepperBtnStyle}
+              >
+                –
+              </button>
+              <button
+                onClick={() => setPopGrowth((p) => Math.min(50, p + 1))}
+                style={stepperBtnStyle}
+              >
+                +
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 2. Road (Trafikverket) */}
+        <div
+          style={{
+            background: "rgba(13,20,37,0.6)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            padding: "10px 12px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <div
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 5,
+                background: "#ef4444",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Car className="w-3 h-3 text-white" />
+            </div>
+            <div>
+              <span style={{ fontSize: 11, fontWeight: 800, color: "var(--text-primary)" }}>
+                Road (Trafikverket)
+              </span>
+              <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: 6 }}>
+                Current: 1.8 °C | 0 active alerts
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ width: 180, fontSize: 10, color: "var(--text-secondary)", fontWeight: 600 }}>
+              Road temperature increase
+            </span>
+            <input
+              type="range"
+              min={-5}
+              max={8}
+              step={0.5}
+              value={roadTemp}
+              onChange={(e) => setRoadTemp(parseFloat(e.target.value))}
+              style={{ flex: 1, accentColor: "#ef4444" }}
+            />
+            <div
+              style={{
+                width: 48,
+                textAlign: "center",
+                fontSize: 11,
+                fontWeight: 800,
+                color: "#ffffff",
+                background: "rgba(239,68,68,0.25)",
+                border: "1px solid rgba(239,68,68,0.4)",
+                padding: "2px 4px",
+                borderRadius: 5,
+              }}
+            >
+              {roadTemp >= 0 ? `+${roadTemp.toFixed(1)}°C` : `${roadTemp.toFixed(1)}°C`}
+            </div>
+            <div style={{ display: "flex", gap: 3 }}>
+              <button
+                onClick={() => setRoadTemp((p) => Math.max(-5, Math.round((p - 0.5) * 10) / 10))}
+                style={stepperBtnStyle}
+              >
+                –
+              </button>
+              <button
+                onClick={() => setRoadTemp((p) => Math.min(8, Math.round((p + 0.5) * 10) / 10))}
+                style={stepperBtnStyle}
+              >
+                +
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 3. Land (Lantmäteriet) */}
+        <div
+          style={{
+            background: "rgba(13,20,37,0.6)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            padding: "10px 12px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <div
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 5,
+                background: "#0284c7",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <MapIcon className="w-3 h-3 text-white" />
+            </div>
+            <div>
+              <span style={{ fontSize: 11, fontWeight: 800, color: "var(--text-primary)" }}>
+                Land (Lantmäteriet)
+              </span>
+              <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: 6 }}>
+                Current: 148,200 parcels | 145 permits
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ width: 180, fontSize: 10, color: "var(--text-secondary)", fontWeight: 600 }}>
+              New development / land use change
+            </span>
+            <input
+              type="range"
+              min={-10}
+              max={50}
+              step={1}
+              value={landDev}
+              onChange={(e) => setLandDev(parseInt(e.target.value))}
+              style={{ flex: 1, accentColor: "#3b82f6" }}
+            />
+            <div
+              style={{
+                width: 48,
+                textAlign: "center",
+                fontSize: 11,
+                fontWeight: 800,
+                color: "#ffffff",
+                background: "rgba(59,130,246,0.25)",
+                border: "1px solid rgba(59,130,246,0.4)",
+                padding: "2px 4px",
+                borderRadius: 5,
+              }}
+            >
+              {landDev >= 0 ? `+${landDev}%` : `${landDev}%`}
+            </div>
+            <div style={{ display: "flex", gap: 3 }}>
+              <button
+                onClick={() => setLandDev((p) => Math.max(-10, p - 1))}
+                style={stepperBtnStyle}
+              >
+                –
+              </button>
+              <button
+                onClick={() => setLandDev((p) => Math.min(50, p + 1))}
+                style={stepperBtnStyle}
+              >
+                +
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 4. Forest (Skogsstyrelsen) */}
+        <div
+          style={{
+            background: "rgba(13,20,37,0.6)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            padding: "10px 12px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <div
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 5,
+                background: "#10b981",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <TreePine className="w-3 h-3 text-white" />
+            </div>
+            <div>
+              <span style={{ fontSize: 11, fontWeight: 800, color: "var(--text-primary)" }}>
+                Forest (Skogsstyrelsen)
+              </span>
+              <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: 6 }}>
+                Current: 2,420 stands | 72% integrity
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ width: 180, fontSize: 10, color: "var(--text-secondary)", fontWeight: 600 }}>
+              Forest harvest / change intensity
+            </span>
+            <input
+              type="range"
+              min={-10}
+              max={50}
+              step={1}
+              value={forestHarvest}
+              onChange={(e) => setForestHarvest(parseInt(e.target.value))}
+              style={{ flex: 1, accentColor: "#10b981" }}
+            />
+            <div
+              style={{
+                width: 48,
+                textAlign: "center",
+                fontSize: 11,
+                fontWeight: 800,
+                color: "#ffffff",
+                background: "rgba(16,185,129,0.25)",
+                border: "1px solid rgba(16,185,129,0.4)",
+                padding: "2px 4px",
+                borderRadius: 5,
+              }}
+            >
+              {forestHarvest >= 0 ? `+${forestHarvest}%` : `${forestHarvest}%`}
+            </div>
+            <div style={{ display: "flex", gap: 3 }}>
+              <button
+                onClick={() => setForestHarvest((p) => Math.max(-10, p - 1))}
+                style={stepperBtnStyle}
+              >
+                –
+              </button>
+              <button
+                onClick={() => setForestHarvest((p) => Math.min(50, p + 1))}
+                style={stepperBtnStyle}
+              >
+                +
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 5. Water (SGU) */}
+        <div
+          style={{
+            background: "rgba(13,20,37,0.6)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            padding: "10px 12px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <div
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 5,
+                background: "#06b6d4",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Droplets className="w-3 h-3 text-white" />
+            </div>
+            <div>
+              <span style={{ fontSize: 11, fontWeight: 800, color: "var(--text-primary)" }}>
+                Water (SGU)
+              </span>
+              <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: 6 }}>
+                Current: 88 aquifers | Normal level
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ width: 180, fontSize: 10, color: "var(--text-secondary)", fontWeight: 600 }}>
+              Groundwater / water stress change
+            </span>
+            <input
+              type="range"
+              min={-50}
+              max={50}
+              step={1}
+              value={waterStress}
+              onChange={(e) => setWaterStress(parseInt(e.target.value))}
+              style={{ flex: 1, accentColor: "#06b6d4" }}
+            />
+            <div
+              style={{
+                width: 48,
+                textAlign: "center",
+                fontSize: 11,
+                fontWeight: 800,
+                color: "#ffffff",
+                background: "rgba(6,182,212,0.25)",
+                border: "1px solid rgba(6,182,212,0.4)",
+                padding: "2px 4px",
+                borderRadius: 5,
+              }}
+            >
+              {waterStress >= 0 ? `+${waterStress}%` : `${waterStress}%`}
+            </div>
+            <div style={{ display: "flex", gap: 3 }}>
+              <button
+                onClick={() => setWaterStress((p) => Math.max(-50, p - 1))}
+                style={stepperBtnStyle}
+              >
+                –
+              </button>
+              <button
+                onClick={() => setWaterStress((p) => Math.min(50, p + 1))}
+                style={stepperBtnStyle}
+              >
+                +
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 6. Weather (SMHI) */}
+        <div
+          style={{
+            background: "rgba(13,20,37,0.6)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            padding: "10px 12px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <div
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 5,
+                background: "#f59e0b",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <CloudSun className="w-3 h-3 text-white" />
+            </div>
+            <div>
+              <span style={{ fontSize: 11, fontWeight: 800, color: "var(--text-primary)" }}>
+                Weather (SMHI)
+              </span>
+              <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: 6 }}>
+                Current: 2.2 °C | 0.3 mm/h | 4.5 m/s
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ width: 180, fontSize: 10, color: "var(--text-secondary)", fontWeight: 600 }}>
+              Temperature & precipitation change
+            </span>
+            <input
+              type="range"
+              min={-5}
+              max={8}
+              step={0.5}
+              value={weatherChange}
+              onChange={(e) => setWeatherChange(parseFloat(e.target.value))}
+              style={{ flex: 1, accentColor: "#f59e0b" }}
+            />
+            <div
+              style={{
+                width: 48,
+                textAlign: "center",
+                fontSize: 11,
+                fontWeight: 800,
+                color: "#ffffff",
+                background: "rgba(245,158,11,0.25)",
+                border: "1px solid rgba(245,158,11,0.4)",
+                padding: "2px 4px",
+                borderRadius: 5,
+              }}
+            >
+              {weatherChange >= 0 ? `+${weatherChange.toFixed(1)}°C` : `${weatherChange.toFixed(1)}°C`}
+            </div>
+            <div style={{ display: "flex", gap: 3 }}>
+              <button
+                onClick={() => setWeatherChange((p) => Math.max(-5, Math.round((p - 0.5) * 10) / 10))}
+                style={stepperBtnStyle}
+              >
+                –
+              </button>
+              <button
+                onClick={() => setWeatherChange((p) => Math.min(8, Math.round((p + 0.5) * 10) / 10))}
+                style={stepperBtnStyle}
+              >
+                +
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Calibrated Scenario Parameters */}
+      {/* Bottom Section: Simulation Mode Radios & Run Combined Simulation CTA Button */}
       <div
         style={{
-          background: "rgba(13,20,37,0.75)",
-          border: "1px solid var(--border)",
-          borderRadius: 10,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 16,
+          background: "rgba(10,15,26,0.9)",
           padding: "12px 14px",
+          borderRadius: 10,
+          border: "1px solid var(--border)",
         }}
       >
-        <div
+        {/* Left: Simulation Mode */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 800, color: "var(--text-primary)" }}>
+            <Settings className="w-3.5 h-3.5 text-blue-400" />
+            <span>Simulation Mode</span>
+          </div>
+          <div style={{ display: "flex", gap: 14 }}>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 10,
+                cursor: "pointer",
+                color: simulationMode === "combined" ? "var(--text-primary)" : "var(--text-muted)",
+              }}
+            >
+              <input
+                type="radio"
+                name="simMode"
+                checked={simulationMode === "combined"}
+                onChange={() => setSimulationMode("combined")}
+                style={{ accentColor: "#2563eb", cursor: "pointer" }}
+              />
+              <div>
+                <div style={{ fontWeight: 700 }}>Combined Impact Analysis</div>
+                <div style={{ fontSize: 9, color: "var(--text-muted)" }}>All sources simulated together (recommended)</div>
+              </div>
+            </label>
+
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 10,
+                cursor: "pointer",
+                color: simulationMode === "individual" ? "var(--text-primary)" : "var(--text-muted)",
+              }}
+            >
+              <input
+                type="radio"
+                name="simMode"
+                checked={simulationMode === "individual"}
+                onChange={() => setSimulationMode("individual")}
+                style={{ accentColor: "#2563eb", cursor: "pointer" }}
+              />
+              <div>
+                <div style={{ fontWeight: 700 }}>Individual Source Analysis</div>
+                <div style={{ fontSize: 9, color: "var(--text-muted)" }}>Compare single source effects</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        {/* Right: CTA Button */}
+        <button
+          onClick={handleRunSimulation}
+          disabled={simulating}
           style={{
+            background: "linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)",
+            border: "none",
+            borderRadius: 10,
+            padding: "10px 20px",
+            color: "#ffffff",
+            cursor: simulating ? "not-allowed" : "pointer",
+            boxShadow: "0 4px 18px rgba(37,99,235,0.45)",
             display: "flex",
-            justifyContent: "space-between",
             alignItems: "center",
-            marginBottom: 10,
+            gap: 10,
+            transition: "all 0.2s",
+            opacity: simulating ? 0.75 : 1,
+            flexShrink: 0,
           }}
         >
           <div
             style={{
-              fontSize: 11,
-              fontWeight: 800,
-              color: "var(--text-primary)",
+              width: 26,
+              height: 26,
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.2)",
               display: "flex",
               alignItems: "center",
-              gap: 6,
+              justifyContent: "center",
             }}
           >
-            <Cpu className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Calibrated Scenario Parameters</span>
+            <Play className={`w-3.5 h-3.5 fill-current ${simulating ? "animate-spin" : ""}`} />
           </div>
-          <button
-            onClick={() => setDriverParams({})}
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "var(--text-muted)",
-              fontSize: 10,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-            }}
-          >
-            <RotateCcw className="w-3 h-3" /> Reset
-          </button>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {activeParams.map((p) => {
-            const val = getParamVal(p);
-            const displayStr =
-              p.unit === "%" ? `${(val * 100).toFixed(0)}%` : `${val.toFixed(1)} ${p.unit}`;
-
-            return (
-              <div key={p.key} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)" }}>
-                    {p.label}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 800,
-                      color: val !== p.default ? "var(--accent-blue)" : "var(--text-primary)",
-                      background: "rgba(99,122,180,0.15)",
-                      padding: "2px 6px",
-                      borderRadius: 4,
-                    }}
-                  >
-                    {displayStr}
-                  </span>
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <button
-                    onClick={() => stepParam(p, "down")}
-                    title="Decrease parameter"
-                    style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 4,
-                      border: "1px solid var(--border)",
-                      background: "rgba(255,255,255,0.06)",
-                      color: "var(--text-primary)",
-                      fontWeight: 800,
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    –
-                  </button>
-                  <input
-                    type="range"
-                    min={p.min}
-                    max={p.max}
-                    step={p.step}
-                    value={val}
-                    onChange={(e) => setParamVal(p.key, parseFloat(e.target.value), p)}
-                    style={{ flex: 1, accentColor: "var(--accent-blue)", cursor: "pointer" }}
-                  />
-                  <button
-                    onClick={() => stepParam(p, "up")}
-                    title="Increase parameter"
-                    style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 4,
-                      border: "1px solid var(--border)",
-                      background: "rgba(255,255,255,0.06)",
-                      color: "var(--text-primary)",
-                      fontWeight: 800,
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    +
-                  </button>
-                </div>
-
-                <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.3 }}>
-                  {p.description}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+          <div style={{ textAlign: "left" }}>
+            <div style={{ fontSize: 13, fontWeight: 900, lineHeight: 1.2 }}>
+              {simulating ? "Simulating Cumulative Model…" : "Run Combined Simulation"}
+            </div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.8)", lineHeight: 1.2 }}>
+              Analyze cumulative impact of all 6 data sources
+            </div>
+          </div>
+        </button>
       </div>
-
-      {/* Run Button */}
-      <button
-        className="btn-primary"
-        onClick={runSimulation}
-        disabled={simulating}
-        style={{
-          width: "100%",
-          padding: "11px 0",
-          fontSize: 12,
-          fontWeight: 800,
-          background: "linear-gradient(135deg, #2563eb, #4f46e5)",
-          boxShadow: "0 4px 14px rgba(37,99,235,0.35)",
-          cursor: simulating ? "not-allowed" : "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 8,
-          borderRadius: 8,
-        }}
-      >
-        <Play className={`w-4 h-4 fill-current ${simulating ? "animate-spin" : ""}`} />
-        <span>{simulating ? "Simulating Multi-Hazard Cross-Propagation…" : "Run Spatial Simulation"}</span>
-      </button>
 
       {errorMsg && (
         <div
           style={{
-            padding: "10px 12px",
-            background: "rgba(239,68,68,0.12)",
+            padding: "8px 12px",
+            background: "rgba(239,68,68,0.15)",
             border: "1px solid rgba(239,68,68,0.3)",
             borderRadius: 8,
             color: "#f87171",
@@ -388,434 +787,89 @@ export default function SimulationTab({ onResult }: SimulationTabProps) {
         </div>
       )}
 
-      {/* Simulation Results Output */}
+      {/* Results Display */}
       {simResult && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 4 }}>
-          {/* Composite Score Card */}
-          <div
-            style={{
-              padding: "12px 14px",
-              borderRadius: 10,
-              background: `linear-gradient(135deg, ${riskColor}22, ${riskColor}08)`,
-              border: `1px solid ${riskColor}55`,
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div
-                  style={{
-                    fontSize: 9,
-                    color: "var(--text-muted)",
-                    fontWeight: 800,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                  }}
-                >
-                  Composite Regional Vulnerability
-                </div>
-                <div style={{ fontSize: 18, fontWeight: 900, color: riskColor, marginTop: 2 }}>
-                  {simResult.summary.regional_risk.level} Vulnerability Tier
-                </div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 22, fontWeight: 900, color: riskColor }}>
-                  {(simResult.summary.regional_risk.score * 100).toFixed(0)}%
-                </div>
-                <div style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 700 }}>
-                  Weighted Index
-                </div>
-              </div>
+        <div
+          style={{
+            background: "rgba(13,20,37,0.85)",
+            border: `1px solid ${riskColor}55`,
+            borderRadius: 10,
+            padding: 14,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+            boxShadow: `0 4px 20px ${riskColor}15`,
+          }}
+        >
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-primary)" }}>
+                {targetYear} Regional Vulnerability Index:
+              </span>
             </div>
-
-            <div
+            <span
               style={{
-                fontSize: 11,
-                color: "var(--text-secondary)",
-                marginTop: 8,
-                lineHeight: 1.5,
+                fontSize: 13,
+                fontWeight: 900,
+                color: riskColor,
+                padding: "2px 8px",
+                borderRadius: 6,
+                background: `${riskColor}22`,
+                border: `1px solid ${riskColor}44`,
               }}
             >
-              {simResult.summary.key_takeaway}
-            </div>
+              {simResult.summary.regional_risk.level} Tier ({(simResult.summary.regional_risk.score * 100).toFixed(0)}%)
+            </span>
           </div>
 
-          {/* Decision Support Insight */}
-          {simInsight && (
-            <div
-              style={{
-                padding: "12px 14px",
-                borderRadius: 10,
-                background: "rgba(139, 92, 246, 0.08)",
-                border: "1px solid rgba(139, 92, 246, 0.25)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 6,
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 800,
-                    color: "#a78bfa",
-                    letterSpacing: "0.05em",
-                    textTransform: "uppercase",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                  }}
-                >
-                  <Layers className="w-3.5 h-3.5 text-purple-400" />
-                  <span>Regional Decision Support Analysis</span>
-                </span>
-                <span
-                  style={{
-                    fontSize: 9,
-                    fontWeight: 800,
-                    textTransform: "uppercase",
-                    padding: "1px 6px",
-                    borderRadius: 4,
-                    background:
-                      simInsight.alert_level === "critical"
-                        ? "#ef4444"
-                        : simInsight.alert_level === "high"
-                        ? "#f59e0b"
-                        : "#3b82f6",
-                    color: "#fff",
-                  }}
-                >
-                  {simInsight.alert_level}
-                </span>
-              </div>
+          <div style={{ fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.4 }}>
+            {simResult.summary.key_takeaway}
+          </div>
 
+          {/* Risk category chips */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+            {Object.entries(simResult.summary.category_risks).map(([cat, lvl]) => (
               <div
+                key={cat}
                 style={{
-                  fontSize: 11,
-                  color: "var(--text-primary)",
-                  lineHeight: 1.5,
-                  marginBottom: 6,
+                  background: "rgba(8,12,20,0.6)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 6,
+                  padding: "6px 4px",
+                  textAlign: "center",
                 }}
               >
-                {simInsight.summary}
-              </div>
-
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "var(--text-secondary)",
-                  lineHeight: 1.5,
-                  marginBottom: 8,
-                  fontStyle: "italic",
-                }}
-              >
-                {simInsight.risk_narrative}
-              </div>
-
-              <div
-                style={{
-                  fontSize: 9,
-                  fontWeight: 800,
-                  color: "var(--text-muted)",
-                  textTransform: "uppercase",
-                  marginBottom: 4,
-                }}
-              >
-                Recommended Municipal Actions:
-              </div>
-              {simInsight.recommendations.map((rec: string, idx: number) => (
+                <div style={{ fontSize: 8, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>
+                  {cat.replace(/_risk/g, "")}
+                </div>
                 <div
-                  key={idx}
                   style={{
                     fontSize: 11,
-                    color: "var(--text-secondary)",
-                    marginBottom: 3,
-                    display: "flex",
-                    gap: 6,
+                    fontWeight: 900,
+                    color: getRiskColor(lvl as string),
+                    marginTop: 2,
                   }}
                 >
-                  <ArrowRight className="w-3 h-3 text-purple-400 flex-shrink-0 mt-0.5" />
-                  <span>{rec}</span>
+                  {lvl}
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* Sub Tab Switcher */}
-          <div
-            style={{
-              display: "flex",
-              gap: 4,
-              background: "rgba(99,122,180,0.1)",
-              borderRadius: 8,
-              padding: 3,
-            }}
-          >
-            {[
-              { id: "impact", label: "Source Impact", icon: <BarChart3 className="w-3.5 h-3.5" /> },
-              { id: "municipalities", label: "Municipalities", icon: <Building2 className="w-3.5 h-3.5" /> },
-              { id: "methodology", label: "Methodology", icon: <BookOpen className="w-3.5 h-3.5" /> },
-            ].map(({ id, label, icon }) => (
-              <button
-                key={id}
-                onClick={() => setSubTab(id as any)}
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 5,
-                  padding: "6px 4px",
-                  borderRadius: 6,
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  background: subTab === id ? "rgba(59,130,246,0.25)" : "transparent",
-                  color: subTab === id ? "var(--accent-blue)" : "var(--text-muted)",
-                  transition: "all 0.18s",
-                }}
-              >
-                {icon}
-                <span>{label}</span>
-              </button>
+              </div>
             ))}
           </div>
 
-          {/* Sub Tab Content: Source Impact */}
-          {subTab === "impact" && (
-            <div style={{ overflowX: "auto" }}>
-              <table className="dt-table" style={{ width: "100%" }}>
-                <thead>
-                  <tr>
-                    <th>Domain Feed</th>
-                    <th style={{ textAlign: "right" }}>Current</th>
-                    <th style={{ textAlign: "right" }}>Simulated</th>
-                    <th style={{ textAlign: "right" }}>Delta</th>
-                    <th style={{ textAlign: "center" }}>Role</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {simResult.impact_by_source.map((item) => {
-                    const isNeg = item.change.startsWith("-");
-                    return (
-                      <tr key={item.id}>
-                        <td>
-                          <div style={{ fontWeight: 800, color: "var(--text-primary)", fontSize: 11 }}>
-                            {item.name.split(" (")[0]}
-                          </div>
-                          <div style={{ fontSize: 9, color: "var(--text-muted)" }}>{item.role}</div>
-                        </td>
-                        <td style={{ textAlign: "right", fontSize: 11 }}>{item.current}</td>
-                        <td style={{ textAlign: "right", fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>
-                          {item.simulated}
-                        </td>
-                        <td style={{ textAlign: "right" }}>
-                          <span
-                            style={{
-                              color: isNeg
-                                ? "var(--risk-high)"
-                                : item.change === "+0%"
-                                ? "var(--text-muted)"
-                                : "var(--risk-low)",
-                              fontWeight: 700,
-                              fontSize: 11,
-                            }}
-                          >
-                            {item.change}
-                          </span>
-                        </td>
-                        <td style={{ textAlign: "center" }}>
-                          <span
-                            className={`risk-badge ${
-                              item.status === "excluded"
-                                ? "risk-no_data"
-                                : item.impact === "Driver"
-                                ? "risk-high"
-                                : item.impact === "High"
-                                ? "risk-medium"
-                                : "risk-low"
-                            }`}
-                          >
-                            {item.status === "excluded" ? "Disabled" : item.impact}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Sub Tab Content: Municipalities */}
-          {subTab === "municipalities" && (
-            <div style={{ overflowX: "auto" }}>
-              <table className="dt-table" style={{ width: "100%" }}>
-                <thead>
-                  <tr>
-                    <th>Municipality</th>
-                    <th style={{ textAlign: "right" }}>2024 Base</th>
-                    <th style={{ textAlign: "right" }}>Sim. {simResult.target_year}</th>
-                    <th style={{ textAlign: "right" }}>Delta</th>
-                    <th style={{ textAlign: "center" }}>Vulnerability</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {simResult.municipalities.map((m) => (
-                    <tr key={m.code}>
-                      <td style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 11 }}>
-                        {m.name}
-                      </td>
-                      <td style={{ textAlign: "right", fontSize: 11 }}>
-                        {m.current_population?.toLocaleString() ?? "—"}
-                      </td>
-                      <td style={{ textAlign: "right", fontSize: 11, fontWeight: 700 }}>
-                        {m.simulated_population?.toLocaleString() ?? "—"}
-                      </td>
-                      <td
-                        style={{
-                          textAlign: "right",
-                          fontSize: 11,
-                          fontWeight: 700,
-                          color: m.population_change_pct >= 0 ? "var(--risk-low)" : "var(--risk-high)",
-                        }}
-                      >
-                        {m.population_change_pct >= 0 ? "+" : ""}
-                        {m.population_change_pct.toFixed(1)}%
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        <span className={`risk-badge risk-${m.overall_risk.level.toLowerCase()}`}>
-                          {m.overall_risk.level}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Sub Tab Content: Methodology */}
-          {subTab === "methodology" && (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 10,
-                fontSize: 11,
-                color: "var(--text-secondary)",
-                lineHeight: 1.6,
-              }}
-            >
-              <div
-                style={{
-                  padding: "10px 12px",
-                  background: "rgba(59,130,246,0.08)",
-                  border: "1px solid rgba(59,130,246,0.25)",
-                  borderRadius: 8,
-                }}
-              >
-                <div style={{ fontWeight: 800, color: "var(--text-primary)", fontSize: 12, marginBottom: 4 }}>
-                  Theoretical Model & Resilience Framework
-                </div>
-                <div>
-                  This digital twin implements a multi-hazard spatial propagation engine following European
-                  Environment Agency (EEA) and Swedish Civil Contingencies Agency (MSB) regional resilience
-                  guidelines.
-                </div>
+          {/* Top recommendations */}
+          {simInsight?.recommendations && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 2 }}>
+              <div style={{ fontSize: 9, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                Priority Resilience Actions:
               </div>
-
-              <div>
-                <div style={{ fontWeight: 800, color: "var(--text-primary)", marginBottom: 4 }}>
-                  Multi-Source Empirical Calibration
+              {simInsight.recommendations.slice(0, 2).map((rec: string, i: number) => (
+                <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 10, color: "var(--text-secondary)" }}>
+                  <ArrowRight className="w-3 h-3 text-blue-400 flex-shrink-0 mt-0.5" />
+                  <span>{rec}</span>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                  <div>
-                    • <strong>Demographic Baseline:</strong> SCB 2024 municipal population counts (total
-                    287,387 across 15 administrative units).
-                  </div>
-                  <div>
-                    • <strong>Meteorological Telemetry:</strong> Live automated hourly observations from SMHI
-                    Stora Spånsberget A (station 105220).
-                  </div>
-                  <div>
-                    • <strong>Corridor Transport:</strong> Trafikverket VViS road temperature and friction
-                    monitoring across E16, Rv50, and Rv70.
-                  </div>
-                  <div>
-                    • <strong>Hydrogeology & Forestry:</strong> SGU 88 groundwater bodies and Skogsstyrelsen
-                    boreal forest canopy monitoring.
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div style={{ fontWeight: 800, color: "var(--text-primary)", marginBottom: 4 }}>
-                  Risk Classification Thresholds
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                  <div
-                    style={{
-                      padding: "6px 8px",
-                      background: "rgba(34,197,94,0.1)",
-                      border: "1px solid rgba(34,197,94,0.25)",
-                      borderRadius: 6,
-                    }}
-                  >
-                    <strong style={{ color: "var(--risk-low)" }}>Low (&lt;30%):</strong> Nominal municipal
-                    operational capacity.
-                  </div>
-                  <div
-                    style={{
-                      padding: "6px 8px",
-                      background: "rgba(245,158,11,0.1)",
-                      border: "1px solid rgba(245,158,11,0.25)",
-                      borderRadius: 6,
-                    }}
-                  >
-                    <strong style={{ color: "var(--risk-medium)" }}>Medium (30–60%):</strong> Noticeable
-                    stress on regional infrastructure.
-                  </div>
-                  <div
-                    style={{
-                      padding: "6px 8px",
-                      background: "rgba(239,68,68,0.1)",
-                      border: "1px solid rgba(239,68,68,0.25)",
-                      borderRadius: 6,
-                    }}
-                  >
-                    <strong style={{ color: "var(--risk-high)" }}>High (60–80%):</strong> Heightened
-                    vulnerability; mitigation required.
-                  </div>
-                  <div
-                    style={{
-                      padding: "6px 8px",
-                      background: "rgba(124,58,237,0.1)",
-                      border: "1px solid rgba(124,58,237,0.25)",
-                      borderRadius: 6,
-                    }}
-                  >
-                    <strong style={{ color: "var(--risk-critical)" }}>Critical (≥80%):</strong> Severe
-                    systemic stress across multiple sectors.
-                  </div>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  borderTop: "1px solid var(--border)",
-                  paddingTop: 8,
-                  color: "var(--text-muted)",
-                  fontSize: 10,
-                }}
-              >
-                <span>Run ID: {simResult.run_id}</span> ·{" "}
-                <span>Calibrated Period: 2024–{simResult.target_year}</span>
-              </div>
+              ))}
             </div>
           )}
         </div>
@@ -823,3 +877,18 @@ export default function SimulationTab({ onResult }: SimulationTabProps) {
     </div>
   );
 }
+
+const stepperBtnStyle: React.CSSProperties = {
+  width: 22,
+  height: 22,
+  borderRadius: 4,
+  border: "1px solid var(--border)",
+  background: "rgba(255,255,255,0.06)",
+  color: "var(--text-primary)",
+  fontWeight: 800,
+  fontSize: 12,
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};

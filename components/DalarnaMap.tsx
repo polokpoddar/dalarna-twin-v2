@@ -78,6 +78,32 @@ export default function DalarnaMap({
       maxZoom: 18,
     }).addTo(map);
 
+    // Add municipality centroid labels layer
+    const labelGroup = L.layerGroup().addTo(map);
+    MUNICIPALITIES.forEach((m) => {
+      const labelIcon = L.divIcon({
+        className: "muni-label-marker",
+        html: `<div style="
+          background: rgba(10, 14, 23, 0.92);
+          border: 1px solid rgba(255, 255, 255, 0.35);
+          color: #ffffff;
+          font-size: 11px;
+          font-weight: 700;
+          padding: 2px 8px;
+          border-radius: 6px;
+          white-space: nowrap;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.8);
+          pointer-events: none;
+          text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+          letter-spacing: 0.02em;
+          transform: translate(-50%, -50%);
+          display: inline-block;
+        ">${m.name}</div>`,
+        iconSize: [0, 0],
+      });
+      L.marker([m.lat, m.lon], { icon: labelIcon, interactive: false }).addTo(labelGroup);
+    });
+
     fetch("/data/dalarna_municipalities.geojson")
       .then((res) => {
         if (!res.ok) throw new Error("GeoJSON not found");
@@ -87,17 +113,36 @@ export default function DalarnaMap({
         const geoLayer = L.geoJSON(geoData, {
           style: (feature) => {
             const code = feature?.properties?.code;
+            const muni = MUNICIPALITIES.find((m) => m.code === code);
             const risk = municipalityRisks?.[code];
-            const fillColor = risk ? getRiskColor(risk.level) : "#1e293b";
+
+            // Default heat shading matching screenshot: Älvdalen & Mora warm gradient, others dark
+            let fillColor = "#0f172a";
+            let fillOpacity = 0.25;
+
+            if (risk) {
+              fillColor = getRiskColor(risk.level);
+              fillOpacity = risk.level === "Critical" ? 0.75 : risk.level === "High" ? 0.65 : 0.45;
+            } else if (muni?.name === "Älvdalen") {
+              fillColor = "#b91c1c";
+              fillOpacity = 0.62;
+            } else if (muni?.name === "Mora") {
+              fillColor = "#9a3412";
+              fillOpacity = 0.48;
+            } else if (muni?.name === "Orsa") {
+              fillColor = "#854d0e";
+              fillOpacity = 0.35;
+            }
+
             const isSelected = code === selectedCode;
 
             return {
               fillColor,
-              fillOpacity: risk ? 0.65 : 0.45,
+              fillOpacity,
               color: isSelected ? "#38bdf8" : "#ffffff",
               weight: isSelected ? 3 : 1.5,
-              opacity: isSelected ? 1 : 0.75,
-              dashArray: isSelected ? "" : "3",
+              opacity: isSelected ? 1 : 0.85,
+              dashArray: isSelected ? "" : "4, 4",
             };
           },
           onEachFeature: (feature, layer) => {
@@ -141,6 +186,7 @@ export default function DalarnaMap({
         }).addTo(map);
 
         geojsonLayerRef.current = geoLayer;
+        labelGroup.eachLayer((l: any) => l.bringToFront?.());
       })
       .catch((err) => console.error("Error loading Dalarna GeoJSON:", err));
 
@@ -237,11 +283,11 @@ export default function DalarnaMap({
           position: "absolute",
           top: 14,
           right: 14,
-          background: "rgba(8,12,20,0.9)",
+          background: "rgba(8,12,20,0.92)",
           backdropFilter: "blur(12px)",
           border: "1px solid rgba(99,122,180,0.25)",
           borderRadius: 8,
-          padding: 4,
+          padding: "3px 4px",
           display: "flex",
           gap: 4,
           zIndex: 500,
@@ -249,26 +295,30 @@ export default function DalarnaMap({
         }}
       >
         {[
-          { key: "satellite", label: "🛰️ Satellite" },
-          { key: "dark", label: "🌑 Dark" },
-          { key: "osm", label: "🗺️ Street" },
-        ].map(({ key, label }) => (
+          { key: "satellite", label: "Satellite", icon: "🌐" },
+          { key: "dark", label: "Dark", icon: "🟣" },
+          { key: "osm", label: "Street", icon: "🗺️" },
+        ].map(({ key, label, icon }) => (
           <button
             key={key}
             onClick={() => switchTile(key as any)}
             style={{
-              padding: "5px 10px",
+              padding: "5px 11px",
               border: "none",
               borderRadius: 6,
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: 700,
               cursor: "pointer",
-              background: tileMode === key ? "rgba(59,130,246,0.3)" : "transparent",
-              color: tileMode === key ? "var(--accent-blue)" : "var(--text-muted)",
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              background: tileMode === key ? "#2563eb" : "transparent",
+              color: tileMode === key ? "#ffffff" : "#94a3b8",
               transition: "all 0.18s",
             }}
           >
-            {label}
+            <span style={{ fontSize: 11 }}>{icon}</span>
+            <span>{label}</span>
           </button>
         ))}
       </div>
@@ -281,7 +331,7 @@ export default function DalarnaMap({
           right: 14,
           display: "flex",
           flexDirection: "column",
-          gap: 4,
+          gap: 5,
           zIndex: 500,
         }}
       >
@@ -292,13 +342,16 @@ export default function DalarnaMap({
             width: 30,
             height: 30,
             borderRadius: 6,
-            background: "rgba(13,20,37,0.9)",
+            background: "rgba(13,20,37,0.92)",
             border: "1px solid var(--border)",
             color: "#fff",
             fontWeight: 800,
-            fontSize: 14,
+            fontSize: 15,
             cursor: "pointer",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
         >
           +
@@ -310,13 +363,16 @@ export default function DalarnaMap({
             width: 30,
             height: 30,
             borderRadius: 6,
-            background: "rgba(13,20,37,0.9)",
+            background: "rgba(13,20,37,0.92)",
             border: "1px solid var(--border)",
             color: "#fff",
             fontWeight: 800,
-            fontSize: 14,
+            fontSize: 15,
             cursor: "pointer",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
         >
           –
@@ -334,15 +390,18 @@ export default function DalarnaMap({
           title="Fit Dalarna Bounds"
           style={{
             width: 30,
-            height: 30,
+            height: 28,
             borderRadius: 6,
-            background: "rgba(13,20,37,0.9)",
+            background: "rgba(13,20,37,0.92)",
             border: "1px solid var(--border)",
             color: "#94a3b8",
-            fontWeight: 700,
+            fontWeight: 800,
             fontSize: 10,
             cursor: "pointer",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
         >
           FIT
@@ -428,50 +487,53 @@ export default function DalarnaMap({
         </div>
       )}
 
-      {/* Vulnerability Scale Legend Bottom Right */}
+      {/* Vulnerability Scale Legend Bottom Centered */}
       <div
         style={{
           position: "absolute",
           bottom: 14,
-          right: 14,
-          background: "rgba(8,12,20,0.9)",
-          backdropFilter: "blur(10px)",
+          left: "50%",
+          transform: "translateX(-50%)",
+          background: "rgba(8,12,20,0.92)",
+          backdropFilter: "blur(12px)",
           border: "1px solid rgba(99,122,180,0.25)",
           borderRadius: 8,
-          padding: "6px 14px",
+          padding: "6px 16px",
           display: "flex",
           alignItems: "center",
-          gap: 12,
+          gap: 14,
           zIndex: 500,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.6)",
         }}
       >
         <span
           style={{
             fontSize: 10,
             color: "var(--text-muted)",
-            fontWeight: 700,
+            fontWeight: 800,
+            letterSpacing: "0.06em",
             textTransform: "uppercase",
           }}
         >
-          Vulnerability Scale:
+          VULNERABILITY SCALE:
         </span>
         {[
-          { label: "Low", color: "#22c55e" },
+          { label: "Low", color: "#10b981" },
           { label: "Medium", color: "#f59e0b" },
           { label: "High", color: "#ef4444" },
           { label: "Critical", color: "#7c3aed" },
         ].map(({ label, color }) => (
-          <div key={label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span
               style={{
                 width: 8,
                 height: 8,
                 borderRadius: "50%",
                 background: color,
+                boxShadow: `0 0 6px ${color}`,
               }}
             />
-            <span style={{ fontSize: 10, fontWeight: 600, color: "#cbd5e1" }}>{label}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#cbd5e1" }}>{label}</span>
           </div>
         ))}
       </div>
